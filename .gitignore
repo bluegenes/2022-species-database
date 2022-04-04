@@ -1,0 +1,4 @@
+.snakemake
+output*/
+*zip
+*csv

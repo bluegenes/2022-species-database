@@ -1,0 +1,12 @@
+name: sourmash-latest
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.8
+  - snakemake>=7.3.6
+  - pandas>=1.4
+  - pip
+  - pip:
+    - git+https://github.com/dib-lab/sourmash@latest

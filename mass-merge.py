@@ -80,7 +80,6 @@ def massmerge(args):
             sys.exit(-1)
         
         for n, (merge_name, idents) in enumerate(merge_d.items()):
-            #ident_picklist =None
             if n % 100 == 0:
                 merge_percent = float(n)/num_merge_names * 100
                 notify(f"...finding sigs for merge name {merge_name}; {merge_percent:.1f}% searched", end="\r")
@@ -100,7 +99,6 @@ def massmerge(args):
 
     # make sure that we get all the things.
     if not all_idents.issubset(found_idents):
-        import pdb;pdb.set_trace()
         remaining = all_idents - found_idents
         error(f"ERROR: {len(remaining)} identifiers from spreadsheet not found.")
         example_missing = "\n".join(remaining)
@@ -178,7 +176,7 @@ def main():
         help='remove abundances from all signatures while merging'
     )
     p.add_argument(
-        '-c', '--merge-col', required=True,
+        '--merge-col', required=True,
         help='the column to merge signatures by (required)'
     )
     p.add_argument(

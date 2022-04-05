@@ -78,24 +78,34 @@ def massmerge(args):
             error(f"ERROR on filename '{db}'.")
             error("No manifest, but a manifest is required.")
             sys.exit(-1)
-        
-        for n, (merge_name, idents) in enumerate(merge_d.items()):
-            if n % 100 == 0:
-                merge_percent = float(n)/num_merge_names * 100
-                notify(f"...finding sigs for merge name {merge_name}; {merge_percent:.1f}% searched", end="\r")
-            # build a new picklist for just these idents
+
+        if args.check:
+            # just check we have all idents
             ident_picklist = SignaturePicklist('ident')
-            ident_picklist.pickset = set(idents)
+            ident_picklist.pickset = all_idents
+            idx = idx.select(ksize=args.ksize,
+                                moltype=moltype,
+                                picklist=ident_picklist)
+            found_idents = ident_picklist.found
+        else:
+            # actually find sigs and keep track of locations across all dbs/manifests
+            for n, (merge_name, idents) in enumerate(merge_d.items()):
+                if n % 100 == 0:
+                    merge_percent = float(n)/num_merge_names * 100
+                    notify(f"...finding sigs for merge name {merge_name}; {merge_percent:.1f}% searched", end="\r")
+                # build a new picklist for just these idents
+                ident_picklist = SignaturePicklist('ident')
+                ident_picklist.pickset = set(idents)
 
-            this_idx = idx.select(ksize=args.ksize,
-                            moltype=moltype,
-                            picklist=ident_picklist)
+                this_idx = idx.select(ksize=args.ksize,
+                                moltype=moltype,
+                                picklist=ident_picklist)
 
-            idx_list.append(this_idx)
+                idx_list.append(this_idx)
 
-            # store idx and found idents
-            found_idents.update(ident_picklist.found)    
-            merge_idx_d[merge_name] += idx_list
+                # store idx and found idents
+                found_idents.update(ident_picklist.found)
+                merge_idx_d[merge_name] += idx_list
 
     # make sure that we get all the things.
     if not all_idents.issubset(found_idents):
@@ -105,10 +115,11 @@ def massmerge(args):
         error(f"Here are some examples: {example_missing}")
         sys.exit(-1)
 
-    notify("Everything looks copacetic. Proceeding to merge!")
-
     if args.check:
+        notify("Everything looks copacetic. Exiting as requested by `--check`")
         sys.exit(0)
+
+    notify("Everything looks copacetic. Proceeding to merge!")
         
     # go through, do merge, save.
     with sourmash_args.SaveSignaturesToLocation(args.output) as save_sigs:
@@ -189,12 +200,12 @@ def main():
     )
     p.add_argument(
         '--check', action='store_true',
-        help='Just check for ability to merge; do not actually merge signatures'
+        help='Just check for ability to merge; do not actually merge signatures.'
     )
     p.add_argument('-F', '--from-spreadsheet',
                    required=True,
                    action='append', default=[],
-                   help="input spreadsheet containing 'ident' and 'name' columns")
+                   help="input spreadsheet containing 'ident' and '--merge-col` columns")
 
     add_ksize_arg(p, 31)
     add_moltype_args(p)

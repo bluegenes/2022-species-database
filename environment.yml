@@ -1,0 +1,9 @@
+name: 2022-species-database 
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.8
+  - snakemake>=7.3.6
+  - pandas>=1.4

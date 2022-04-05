@@ -15,9 +15,10 @@ all_species = taxDF["species"].unique().tolist()
 # species filenames need to have no spaces. Sig names keep spaces
 speciesD = {s.replace(' ', '_'):s for s in all_species}
 
-temp_dir= "/group/ctbrowngrp/scratch/ntpierce"
 out_dir = "outputs.species-db"
 logs_dir = os.path.join(out_dir, "logs") 
+#temp_dir= "/group/ctbrowngrp/scratch/ntpierce"
+temp_dir= out_dir
 alphabet="nucleotide"
 ksize=31
 
@@ -30,20 +31,20 @@ rule all:
 # after making siglist
 rule make_species_sigs:
     input:
-        database="gtdb-rs202.{alphabet}-k{ksize}.zip",
+        #database="gtdb-rs202.{alphabet}-k{ksize}.zip",
+        database="gtdb-rs202.{alphabet}-k{ksize}.renamed.zip"
     output:
         sig = temp(os.path.join(temp_dir, "sigs", "{species}.{alphabet}-k{ksize}.sig.gz"))
     params:
         signame = lambda w: speciesD[w.species], # get species name WITH the space
-        grep = lambda w: speciesD[w.species].split("s__")[1], # i don't have "s__" in my sig names
     conda:
         "conf/env/sourmash4.yml"
     log: os.path.join(logs_dir, "make-species-sigs", "{species}.{alphabet}-k{ksize}.log")
     benchmark: os.path.join(logs_dir, "make-species-sigs", "{species}.{alphabet}-k{ksize}.benchmark")
     shell:
         """
-        sourmash sig grep {params.grep:q} {input.database} | \
-        sourmash sig merge --name {params.signame:q} \
+        sourmash sig grep {params.signame:q} {input.database} | \
+        sourmash sig merge - --name {params.signame:q} \
         -o {output.sig} 2> {log}
         """
 

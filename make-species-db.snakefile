@@ -1,4 +1,7 @@
 """
+NOTE: do not use; mass-merge.py is the way :)
+
+
 Using an existing database, aggregate hashes from all strains 
 into a single signature per species. Build zipfile database 
 from these species-wide signatures. Perhaps useful for

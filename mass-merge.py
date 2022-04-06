@@ -34,7 +34,6 @@ def massmerge(args):
     set_quiet(args.quiet, args.quiet)
     moltype = sourmash_args.calculate_moltype(args)
     merge_col = args.merge_col
-    #CTB _extend_signatures_with_from_file(args)
 
     # load spreadsheets
     merge_d = defaultdict(list)
@@ -80,13 +79,14 @@ def massmerge(args):
             sys.exit(-1)
 
         if args.check:
-            # just check we have all idents
+            # first, just check we have all idents
             ident_picklist = SignaturePicklist('ident')
             ident_picklist.pickset = all_idents
+            # here, we're selecting on the manifest right? not loading sigs?
             idx = idx.select(ksize=args.ksize,
                                 moltype=moltype,
                                 picklist=ident_picklist)
-            found_idents = ident_picklist.found
+            found_idents.update(ident_picklist.found)
         else:
             # actually find sigs and keep track of locations across all dbs/manifests
             for n, (merge_name, idents) in enumerate(merge_d.items()):
@@ -97,6 +97,7 @@ def massmerge(args):
                 ident_picklist = SignaturePicklist('ident')
                 ident_picklist.pickset = set(idents)
 
+                # this should not actually load sigs, right?
                 this_idx = idx.select(ksize=args.ksize,
                                 moltype=moltype,
                                 picklist=ident_picklist)
@@ -124,7 +125,7 @@ def massmerge(args):
     # go through, do merge, save.
     with sourmash_args.SaveSignaturesToLocation(args.output) as save_sigs:
         n = 0
-        num_singletons = 0
+        n_singletons = 0
         for m, (merge_name, idx_list) in enumerate(merge_idx_d.items()):
             if m % 100 == 0:
                 merge_percent = float(n)/found_idents * 100
@@ -137,7 +138,7 @@ def massmerge(args):
                 if args.flatten:
                     ss.minhash = ss.minhash.flatten()
                 save_sigs.add(ss)
-                num_singletons+=1
+                n_singletons+=1
                 n += 1
             else: # merge sigs
                 first_sig = None
@@ -172,6 +173,7 @@ def massmerge(args):
                 save_sigs.add(merged_ss)
 
     notify(f"merged {n} signatures into {len(save_sigs)} signatures by column {merge_col}")
+    notify(f"of these, {n_singletons} signatures were singletons (renamed and saved to output)")
 
 
 def main():

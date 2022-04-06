@@ -63,10 +63,8 @@ def massmerge(args):
     num_merge_names = len(merge_d)
     notify(f"found a total of {num_merge_names} distinct values for signature merging.")
 
-    # make new dict with the idx refs for all idents/alldbs
-    merge_idx_d = defaultdict(list)
+    # load each db and check that we can find all idents
     found_idents = set()
-    # go through all the database and load etc.
     idx_list = []
     for db in args.dblist:
         notify(f"loading index '{db}'")
@@ -78,35 +76,14 @@ def massmerge(args):
             error("No manifest, but a manifest is required.")
             sys.exit(-1)
 
-        if args.check:
-            # first, just check we have all idents
-            ident_picklist = SignaturePicklist('ident')
-            ident_picklist.pickset = all_idents
-            # here, we're selecting on the manifest right? not loading sigs?
-            idx = idx.select(ksize=args.ksize,
-                                moltype=moltype,
-                                picklist=ident_picklist)
-            found_idents.update(ident_picklist.found)
-        else:
-            # actually find sigs and keep track of locations across all dbs/manifests
-            for n, (merge_name, idents) in enumerate(merge_d.items()):
-                if n % 100 == 0:
-                    merge_percent = float(n)/num_merge_names * 100
-                    notify(f"...finding sigs for merge name {merge_name}; {merge_percent:.1f}% searched", end="\r")
-                # build a new picklist for just these idents
-                ident_picklist = SignaturePicklist('ident')
-                ident_picklist.pickset = set(idents)
+        ident_picklist = SignaturePicklist('ident')
+        ident_picklist.pickset = all_idents
 
-                # is this loading sigs?
-                this_idx = idx.select(ksize=args.ksize,
-                                moltype=moltype,
-                                picklist=ident_picklist)
-
-                idx_list.append(this_idx)
-
-                # store idx and found idents
-                found_idents.update(ident_picklist.found)
-                merge_idx_d[merge_name] += idx_list
+        check_idx = idx.select(ksize=args.ksize,
+                            moltype=moltype,
+                            picklist=ident_picklist)
+        found_idents.update(ident_picklist.found)
+        idx_list.append(idx)
 
     # make sure that we get all the things.
     if not all_idents.issubset(found_idents):
@@ -121,61 +98,64 @@ def massmerge(args):
         sys.exit(0)
 
     notify("Everything looks copacetic. Proceeding to merge!")
-        
+
     # go through, do merge, save.
     with sourmash_args.SaveSignaturesToLocation(args.output) as save_sigs:
-        n = 0
+        n=0
         n_singletons = 0
-        for m, (merge_name, idx_list) in enumerate(merge_idx_d.items()):
+        for m, (merge_name, idents) in enumerate(merge_d.items()):
+            # keep count of singletons
+            if len(idents) == 1:
+                n_singletons+=1
             if m % 100 == 0:
                 merge_percent = float(n)/len(found_idents) * 100
-                notify(f"...at merge name {merge_name}; {merge_percent:.1f}% merged", end="\r")
+                notify(f"...merging sigs for {merge_name} ({merge_percent:.1f}% of sigs merged)", end="\r")
 
-            # if only one item, just rename and save
-            these_idents = merge_d[merge_name]
-            if len(these_idents) == 1:
-                sigs = idx_list[0].signatures()
-                ss = next(sigs)
-                ss._name = merge_name
-                if args.flatten:
-                    ss.minhash = ss.minhash.flatten()
-                save_sigs.add(ss)
-                n_singletons+=1
-                n += 1
-            else: # merge sigs
-                first_sig = None
-                mh = None
-                for idx in idx_list:
-                    for ss in idx.signatures():
-                        n += 1
-                        # first sig? initialize some things
-                        if first_sig is None:
-                            first_sig = ss
-                            mh = first_sig.minhash.copy_and_clear()
+            # build a new picklist for idents to be merged
+            ident_picklist = SignaturePicklist('ident')
+            ident_picklist.pickset = set(idents)
 
-                            # forcibly remove abundance?
-                            if args.flatten:
-                                mh.track_abundance = False
+            # loop through each idx (db), select sigs, merge mh
+            first_sig = None
+            mh = None
+            merged_ss = None
+            for idx in idx_list:
+                this_idx = idx.select(ksize=args.ksize,
+                                moltype=moltype,
+                                picklist=ident_picklist)
+                for ss in this_idx.signatures():
+                    n += 1
+                    # first sig? initialize some things
+                    if first_sig is None:
+                        first_sig = ss
+                        mh = first_sig.minhash.copy_and_clear()
 
-                        try:
-                            sigobj_mh = ss.minhash
-                            if not args.flatten:
-                                _check_abundance_compatibility(first_sig, ss)
-                            else:
-                                sigobj_mh.track_abundance = False
+                        # forcibly remove abundance?
+                        if args.flatten:
+                            mh.track_abundance = False
 
-                            mh.merge(sigobj_mh)
-                        except (TypeError, ValueError) as exc:
-                            error("ERROR when merging signature '{}' ({}) from file {}",
-                                ss, ss.md5sum()[:8])
-                            error(str(exc))
-                            sys.exit(-1)
+                    try:
+                        sigobj_mh = ss.minhash
+                        if not args.flatten:
+                            _check_abundance_compatibility(first_sig, ss)
+                        else:
+                            sigobj_mh.track_abundance = False
 
-                merged_ss = sourmash.SourmashSignature(mh, name=merge_name)
-                save_sigs.add(merged_ss)
+                        mh.merge(sigobj_mh)
+                    except (TypeError, ValueError) as exc:
+                        error("ERROR when merging signature '{}' ({}) from file {}",
+                            ss, ss.md5sum()[:8])
+                        error(str(exc))
+                        sys.exit(-1)
 
-    notify(f"merged {n} signatures into {len(save_sigs)} signatures by column {merge_col}")
-    notify(f"of these, {n_singletons} signatures were singletons (renamed and saved to output)")
+            merge_percent = float(n)/len(found_idents) * 100
+            notify(f"...merged {len(idents)} sigs for {merge_name} ({merge_percent:.1f}% of sigs merged)", end="\r")
+            # create merged sig and write to output
+            merged_ss = sourmash.SourmashSignature(mh, name=merge_name)
+            save_sigs.add(merged_ss)
+
+        notify(f"merged {n} signatures into {len(save_sigs)} signatures by column: {merge_col}")
+        notify(f"  of these, {n_singletons} were singletons (no merge; just renamed)")
 
 
 def main():

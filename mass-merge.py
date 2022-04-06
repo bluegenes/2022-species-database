@@ -97,7 +97,7 @@ def massmerge(args):
                 ident_picklist = SignaturePicklist('ident')
                 ident_picklist.pickset = set(idents)
 
-                # this should not actually load sigs, right?
+                # is this loading sigs?
                 this_idx = idx.select(ksize=args.ksize,
                                 moltype=moltype,
                                 picklist=ident_picklist)
@@ -128,12 +128,14 @@ def massmerge(args):
         n_singletons = 0
         for m, (merge_name, idx_list) in enumerate(merge_idx_d.items()):
             if m % 100 == 0:
-                merge_percent = float(n)/found_idents * 100
-                notify(f"...at merge name {m}; {merge_percent:.1f}% processed", end="\r")
+                merge_percent = float(n)/len(found_idents) * 100
+                notify(f"...at merge name {merge_name}; {merge_percent:.1f}% merged", end="\r")
 
             # if only one item, just rename and save
-            if len(idx_list) == 1:
-                ss = idx_list[0].signatures()
+            these_idents = merge_d[merge_name]
+            if len(these_idents) == 1:
+                sigs = idx_list[0].signatures()
+                ss = next(sigs)
                 ss._name = merge_name
                 if args.flatten:
                     ss.minhash = ss.minhash.flatten()
